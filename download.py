@@ -7,6 +7,7 @@ import gevent.queue
 import gzip
 import urllib2
 from bs4 import BeautifulSoup
+import datetime
 
 class URLWatcher:
 	def __init__(self):
@@ -20,8 +21,12 @@ class URLWatcher:
 		except urllib2.URLError, e:
 			print e
 		text = resp.read()
-		if len(self.storage[url]) == 0 or text != self.storage[url][-1]:
-			self.storage[url].append(text)
+		if len(self.storage[url]) == 0 or text != self.storage[url][-1]['body']:
+			version = {
+				'body': text,
+				'date': datetime.datetime.now().isoformat()
+			}
+			self.storage[url].append(version)
 			print 'saved %s' % (url,)
 		else:
 			print 'no change %s' % (url,)
@@ -39,11 +44,12 @@ class URLWatcher:
 		return [str('will save %s forever' % (url,))]
 
 	def diff(self, env, start_response, url):
-		left = self.storage[url][0]
-		right = self.storage[url][-1]
+		left = self.storage[url][0]['body']
+		right = self.storage[url][-1]['body']
 		diff = htmlDiff(left, right)
+		versions = [v['date'] for v in self.storage[url]]
 		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
-		return [diff]
+		return [htmlList(versions), diff]
 
 	def saveState(self, env, start_response):
 		saveObject(self.storage, self.storageLocation)
@@ -56,6 +62,9 @@ class URLWatcher:
 			self.queue.put(url)
 		start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
 		return ['State loaded']
+
+def htmlList(list):
+	return '<ul><li>'+'</li><li>'.join(list)+'</li></ul>'
 
 def htmlBeautify(html):
 	return BeautifulSoup(html, 'html.parser').prettify(formatter=None).encode('utf-8').split('\n')
