@@ -14,6 +14,35 @@ class URLWatcher:
 		self.storage = defaultdict(list)
 		self.queue = gevent.queue.Queue()
 		self.storageLocation = 'storage.pkl'
+		self.stopList = []
+
+	def addAction(self, env, start_response, url):
+		self.add(url)
+		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
+		return [str('will save %s forever' % (url,))]
+
+	def stopAction(self, env, start_response, url):
+		self.stop(url)
+		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
+		return [str('stopped %s' % (url,))]
+
+	def diffAction(self, env, start_response, url, versionLeft='0', versionRight='-1'):
+		left = self.storage[url][int(versionLeft)]['body']
+		right = self.storage[url][int(versionRight)]['body']
+		diff = htmlDiff(left, right)
+		versions = [v['date'] for v in self.storage[url]]
+		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
+		return [diff, htmlList(versions, url)]
+
+	def saveStateAction(self, env, start_response):
+		saveObject(self.storage, self.storageLocation)
+		start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
+		return ['State saved']
+
+	def loadStateAction(self, env, start_response):
+		self.loadState()
+		start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
+		return ['State loaded']
 
 	def save(self, url):
 		try:
@@ -34,37 +63,32 @@ class URLWatcher:
 
 	def saveNext(self):
 		url = self.queue.get(timeout=0)
-		self.save(url)
+		if url in self.stopList:
+			stopList.remove(url)
+		else:
+			self.save(url)
 
-	def add(self, env, start_response, url):
+	def stop(self, url):
+		self.stopList.append(url)
+
+	def add(self, url):
 		if url not in self.storage:
 			self.storage[url] = []
 		self.queue.put(url)
-		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
-		return [str('will save %s forever' % (url,))]
 
-	def diff(self, env, start_response, url):
-		left = self.storage[url][0]['body']
-		right = self.storage[url][-1]['body']
-		diff = htmlDiff(left, right)
-		versions = [v['date'] for v in self.storage[url]]
-		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
-		return [htmlList(versions), diff]
-
-	def saveState(self, env, start_response):
-		saveObject(self.storage, self.storageLocation)
-		start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
-		return ['State saved']
-
-	def loadState(self, env, start_response):
+	def loadState(self):
+		print 'loading state ...'
 		self.storage = loadObject(self.storageLocation)
 		for url in self.storage:
 			self.queue.put(url)
-		start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
-		return ['State loaded']
+		print '... finished'
 
-def htmlList(list):
-	return '<ul><li>'+'</li><li>'.join(list)+'</li></ul>'
+
+def htmlList(list, url):
+	items = ''
+	for k,v in enumerate(list):
+		items += '<li><a href="/diff/%s/%s/%s">%s</a></li>' % (max(k-1, 0),k,url,v)
+	return str('<ul>' + items + '</ul>')
 
 def htmlBeautify(html):
 	return BeautifulSoup(html, 'html.parser').prettify(formatter=None).encode('utf-8').split('\n')
