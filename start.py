@@ -20,6 +20,7 @@ map.connect(None, '/diff/{url:.+?}', action="diffAction")
 map.connect(None, '/stop/{url:.+?}', action="stopAction")
 map.connect(None, '/save', action="saveStateAction")
 map.connect(None, '/load', action="loadStateAction")
+map.connect(None, '/list', action="listAction")
 
 def repeater(fn, minWait=1, minWaitPerUrl=5):
 	while 1:

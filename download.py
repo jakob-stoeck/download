@@ -44,6 +44,14 @@ class URLWatcher:
 		start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
 		return ['State loaded']
 
+	def listAction(self, env, start_response):
+		start_response('200 OK', [('Content-Type','text/html; charset=utf-8')])
+		list = '<ul>'
+		for url in self.storage:
+			list += '<li><a href="/diff/%s">%s</a></li>' % (url, url)
+		list += '</ul>'
+		return [str(list)]
+
 	def save(self, url):
 		try:
 			resp = urllib2.urlopen(url)
@@ -82,7 +90,6 @@ class URLWatcher:
 		for url in self.storage:
 			self.queue.put(url)
 		print '... finished'
-
 
 def htmlList(list, url):
 	items = ''
